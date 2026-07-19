@@ -44,7 +44,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final gs1 = Gs1Parser.parse(raw);
       final barcode = gs1.gtin ?? raw;
 
-      final existing = await PantryDatabase.instance.findByBarcode(barcode);
+      final existing = await PantryDatabase.instance.findByGtin(barcode);
       if (existing != null && mounted) {
         Navigator.of(context).pop(ScanResult(existing: existing));
         return;
@@ -62,12 +62,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final draft = PantryItem(
         name: lookup?.name ?? 'Unknown product',
         brand: lookup?.brand,
-        barcode: barcode,
+        gtin: barcode,
         category: lookup?.category ?? FoodCategory.other,
         quantity: lookup?.quantity,
         unit: lookup?.unit,
         expiryDate: gs1.effectiveExpiry,
-        addedAt: DateTime.now(),
+        // GS1 AI 17 is authoritative; a heuristic date would be marked estimated.
+        expiryIsExact: gs1.effectiveExpiry != null,
+        addedDate: DateTime.now(),
         imageUrl: imagePath,
       );
       if (!mounted) return;

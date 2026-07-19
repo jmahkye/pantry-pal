@@ -1,65 +1,53 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../data/database.dart';
 import '../models/pantry_item.dart';
 import '../services/notifications.dart';
 import '../services/product_image_cache.dart';
+import '../state/pantry_providers.dart';
 import 'item_edit_screen.dart';
 import 'recipes_screen.dart';
 import 'scanner_screen.dart';
 
-class PantryListScreen extends StatefulWidget {
+class PantryListScreen extends ConsumerWidget {
   const PantryListScreen({super.key});
 
-  @override
-  State<PantryListScreen> createState() => _PantryListScreenState();
-}
-
-class _PantryListScreenState extends State<PantryListScreen> {
-  late Future<List<PantryItem>> _itemsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  void _reload() {
-    setState(() {
-      _itemsFuture = PantryDatabase.instance.all();
-    });
-  }
-
-  Future<void> _openEditor({PantryItem? existing, PantryItem? draft}) async {
+  Future<void> _openEditor(
+    BuildContext context,
+    WidgetRef ref, {
+    PantryItem? existing,
+    PantryItem? draft,
+  }) async {
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => ItemEditScreen(existing: existing, draft: draft),
       ),
     );
-    if (result == true) _reload();
+    if (result == true) ref.read(pantryItemsProvider.notifier).refresh();
   }
 
-  Future<void> _openScanner() async {
+  Future<void> _openScanner(BuildContext context, WidgetRef ref) async {
     final scanned = await Navigator.of(context).push<ScanResult>(
       MaterialPageRoute(builder: (_) => const ScannerScreen()),
     );
-    if (scanned == null || !mounted) return;
-    await _openEditor(existing: scanned.existing, draft: scanned.draft);
+    if (scanned == null || !context.mounted) return;
+    await _openEditor(context, ref,
+        existing: scanned.existing, draft: scanned.draft);
   }
 
-  Future<void> _delete(PantryItem item) async {
+  Future<void> _delete(WidgetRef ref, PantryItem item) async {
     if (item.id == null) return;
-    await PantryDatabase.instance.delete(item.id!);
+    await ref.read(pantryItemsProvider.notifier).delete(item.id!);
     await NotificationService.instance.cancelForItem(item.id!);
     await ProductImageCache.instance.deleteAt(item.imageUrl);
-    _reload();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final itemsAsync = ref.watch(pantryItemsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pantry Pal'),
@@ -74,18 +62,15 @@ class _PantryListScreenState extends State<PantryListScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<PantryItem>>(
-        future: _itemsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = snapshot.data ?? const [];
+      body: itemsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Could not load pantry: $e')),
+        data: (items) {
           if (items.isEmpty) {
             return const _EmptyState();
           }
           return RefreshIndicator(
-            onRefresh: () async => _reload(),
+            onRefresh: () => ref.read(pantryItemsProvider.notifier).refresh(),
             child: ListView.separated(
               itemCount: items.length,
               separatorBuilder: (context, index) => const Divider(height: 1),
@@ -93,8 +78,8 @@ class _PantryListScreenState extends State<PantryListScreen> {
                 final item = items[i];
                 return _PantryTile(
                   item: item,
-                  onTap: () => _openEditor(existing: item),
-                  onDelete: () => _delete(item),
+                  onTap: () => _openEditor(context, ref, existing: item),
+                  onDelete: () => _delete(ref, item),
                 );
               },
             ),
@@ -107,14 +92,14 @@ class _PantryListScreenState extends State<PantryListScreen> {
         children: [
           FloatingActionButton.small(
             heroTag: 'add-manual',
-            onPressed: () => _openEditor(),
+            onPressed: () => _openEditor(context, ref),
             tooltip: 'Add manually',
             child: const Icon(Icons.edit),
           ),
           const SizedBox(height: 12),
           FloatingActionButton.extended(
             heroTag: 'scan',
-            onPressed: _openScanner,
+            onPressed: () => _openScanner(context, ref),
             icon: const Icon(Icons.qr_code_scanner),
             label: const Text('Scan'),
           ),

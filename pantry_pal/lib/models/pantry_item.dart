@@ -40,12 +40,21 @@ class PantryItem {
   final int? id;
   final String name;
   final String? brand;
-  final String? barcode;
+  final String? gtin;
   final FoodCategory category;
   final double? quantity;
   final String? unit;
   final DateTime? expiryDate;
-  final DateTime addedAt;
+
+  /// True when the expiry came from an authoritative source (GS1 AI 17 or the
+  /// user typing it in); false when it was estimated from shelf_life_days.
+  /// Estimated dates are surfaced as editable in the UI.
+  final bool expiryIsExact;
+  final DateTime addedDate;
+
+  /// Marked used-up. Consumed items stay in the DB (for history) but are hidden
+  /// from the active pantry list rather than deleted.
+  final bool consumed;
   final String? notes;
   final String? imageUrl;
 
@@ -53,12 +62,14 @@ class PantryItem {
     this.id,
     required this.name,
     this.brand,
-    this.barcode,
+    this.gtin,
     required this.category,
     this.quantity,
     this.unit,
     this.expiryDate,
-    required this.addedAt,
+    this.expiryIsExact = true,
+    required this.addedDate,
+    this.consumed = false,
     this.notes,
     this.imageUrl,
   });
@@ -67,12 +78,14 @@ class PantryItem {
     int? id,
     String? name,
     String? brand,
-    String? barcode,
+    String? gtin,
     FoodCategory? category,
     double? quantity,
     String? unit,
     DateTime? expiryDate,
-    DateTime? addedAt,
+    bool? expiryIsExact,
+    DateTime? addedDate,
+    bool? consumed,
     String? notes,
     String? imageUrl,
     bool clearExpiry = false,
@@ -81,12 +94,14 @@ class PantryItem {
       id: id ?? this.id,
       name: name ?? this.name,
       brand: brand ?? this.brand,
-      barcode: barcode ?? this.barcode,
+      gtin: gtin ?? this.gtin,
       category: category ?? this.category,
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
       expiryDate: clearExpiry ? null : (expiryDate ?? this.expiryDate),
-      addedAt: addedAt ?? this.addedAt,
+      expiryIsExact: expiryIsExact ?? this.expiryIsExact,
+      addedDate: addedDate ?? this.addedDate,
+      consumed: consumed ?? this.consumed,
       notes: notes ?? this.notes,
       imageUrl: imageUrl ?? this.imageUrl,
     );
@@ -96,12 +111,14 @@ class PantryItem {
         'id': id,
         'name': name,
         'brand': brand,
-        'barcode': barcode,
+        'gtin': gtin,
         'category': category.name,
         'quantity': quantity,
         'unit': unit,
         'expiry_date': expiryDate?.toIso8601String(),
-        'added_at': addedAt.toIso8601String(),
+        'expiry_is_exact': expiryIsExact ? 1 : 0,
+        'added_date': addedDate.toIso8601String(),
+        'consumed': consumed ? 1 : 0,
         'notes': notes,
         'image_url': imageUrl,
       };
@@ -110,14 +127,16 @@ class PantryItem {
         id: map['id'] as int?,
         name: map['name'] as String,
         brand: map['brand'] as String?,
-        barcode: map['barcode'] as String?,
+        gtin: map['gtin'] as String?,
         category: FoodCategory.fromName(map['category'] as String?),
         quantity: (map['quantity'] as num?)?.toDouble(),
         unit: map['unit'] as String?,
         expiryDate: map['expiry_date'] == null
             ? null
             : DateTime.parse(map['expiry_date'] as String),
-        addedAt: DateTime.parse(map['added_at'] as String),
+        expiryIsExact: (map['expiry_is_exact'] as int? ?? 1) == 1,
+        addedDate: DateTime.parse(map['added_date'] as String),
+        consumed: (map['consumed'] as int? ?? 0) == 1,
         notes: map['notes'] as String?,
         imageUrl: map['image_url'] as String?,
       );

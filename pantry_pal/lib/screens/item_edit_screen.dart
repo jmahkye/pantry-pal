@@ -27,7 +27,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   late TextEditingController _notesCtrl;
   late FoodCategory _category;
   DateTime? _expiry;
-  String? _barcode;
+  String? _gtin;
   String? _imageUrl;
 
   bool get _isEdit => widget.existing != null;
@@ -44,7 +44,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _notesCtrl = TextEditingController(text: source?.notes ?? '');
     _category = source?.category ?? FoodCategory.other;
     _expiry = source?.expiryDate;
-    _barcode = source?.barcode;
+    _gtin = source?.gtin;
     _imageUrl = source?.imageUrl;
   }
 
@@ -76,12 +76,12 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
             PantryItem(
               name: '',
               category: _category,
-              addedAt: DateTime.now(),
+              addedDate: DateTime.now(),
             ))
         .copyWith(
       name: _nameCtrl.text.trim(),
       brand: _brandCtrl.text.trim().isEmpty ? null : _brandCtrl.text.trim(),
-      barcode: _barcode,
+      gtin: _gtin,
       category: _category,
       quantity: double.tryParse(_quantityCtrl.text.replaceAll(',', '.')),
       unit: _unitCtrl.text.trim().isEmpty ? null : _unitCtrl.text.trim(),
@@ -242,10 +242,10 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            if (_barcode != null) ...[
+            if (_gtin != null) ...[
               const SizedBox(height: 16),
               Text(
-                'Barcode: $_barcode',
+                'Barcode: $_gtin',
                 style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ],
