@@ -1,12 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/database.dart';
 import '../models/pantry_item.dart';
 import '../services/notifications.dart';
-import '../services/product_image_cache.dart';
 
 class ItemEditScreen extends StatefulWidget {
   const ItemEditScreen({super.key, this.existing, this.draft});
@@ -28,7 +25,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   late FoodCategory _category;
   DateTime? _expiry;
   String? _gtin;
-  String? _imageUrl;
 
   bool get _isEdit => widget.existing != null;
 
@@ -45,7 +41,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _category = source?.category ?? FoodCategory.other;
     _expiry = source?.expiryDate;
     _gtin = source?.gtin;
-    _imageUrl = source?.imageUrl;
   }
 
   @override
@@ -87,7 +82,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
       unit: _unitCtrl.text.trim().isEmpty ? null : _unitCtrl.text.trim(),
       expiryDate: _expiry,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      imageUrl: _imageUrl,
       clearExpiry: _expiry == null,
     );
 
@@ -109,7 +103,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     if (!_isEdit) return;
     await PantryDatabase.instance.delete(widget.existing!.id!);
     await NotificationService.instance.cancelForItem(widget.existing!.id!);
-    await ProductImageCache.instance.deleteAt(widget.existing!.imageUrl);
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }
@@ -133,27 +126,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (_imageUrl != null && _imageUrl!.isNotEmpty) ...[
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: ProductImageCache.isRemote(_imageUrl!)
-                      ? Image.network(
-                          _imageUrl!,
-                          height: 160,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        )
-                      : Image.file(
-                          File(_imageUrl!),
-                          height: 160,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
             TextFormField(
               controller: _nameCtrl,
               decoration: const InputDecoration(

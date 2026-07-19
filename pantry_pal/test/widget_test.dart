@@ -23,5 +23,21 @@ void main() {
       expect(data.gtin, isNull);
       expect(data.expiryDate, isNull);
     });
+
+    test('parses a GS1 Digital Link URL from a QR code', () {
+      const raw =
+          'https://example.com/01/05000000000056/17/261015/10/ABC123';
+      final data = Gs1Parser.parse(raw);
+      expect(data.gtin, '05000000000056');
+      expect(data.expiryDate, DateTime(2026, 10, 15));
+      expect(data.batch, 'ABC123');
+    });
+
+    test('reads Digital Link AIs from query parameters', () {
+      const raw = 'https://id.gs1.org/01/05000000000056?17=251201';
+      final data = Gs1Parser.parse(raw);
+      expect(data.gtin, '05000000000056');
+      expect(data.expiryDate, DateTime(2025, 12, 1));
+    });
   });
 }

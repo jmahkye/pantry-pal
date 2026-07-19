@@ -41,6 +41,13 @@ class Gs1Parser {
   };
 
   static Gs1Data parse(String raw) {
+    // GS1 Digital Link QR codes encode the data as a URL, e.g.
+    // https://example.com/01/05000000000056/17/261015/10/ABC123
+    // Detect and parse those separately from concatenated element strings.
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return _parseDigitalLink(raw);
+    }
+
     var input = raw;
     if (input.startsWith(']d2') || input.startsWith(']D2')) {
       input = input.substring(3);
@@ -106,7 +113,34 @@ class Gs1Parser {
     );
   }
 
-  static DateTime? _parseDate(String yymmdd) {
+  /// Parses a GS1 Digital Link URL. AIs appear as `/ai/value` pairs in the path
+  /// (GTIN in AI 01 is the "primary key"), and any of the same AIs may also
+  /// appear as query parameters (e.g. `?17=261015`). Path pairs win.
+  static Gs1Data _parseDigitalLink(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return const Gs1Data();
+
+    final values = <String, String>{};
+
+    // Path segments walked in AI/value pairs.
+    final segs = uri.pathSegments;
+    for (var i = 0; i + 1 < segs.length; i += 2) {
+      values[segs[i]] = Uri.decodeComponent(segs[i + 1]);
+    }
+    // Query parameters as a fallback (don't overwrite path values).
+    uri.queryParameters.forEach((k, v) => values.putIfAbsent(k, () => v));
+
+    return Gs1Data(
+      gtin: values['01'],
+      expiryDate: _parseDate(values['17']),
+      bestBeforeDate: _parseDate(values['15']),
+      batch: values['10'],
+      serial: values['21'],
+    );
+  }
+
+  static DateTime? _parseDate(String? yymmdd) {
+    if (yymmdd == null) return null;
     if (yymmdd.length != 6) return null;
     final yy = int.tryParse(yymmdd.substring(0, 2));
     final mm = int.tryParse(yymmdd.substring(2, 4));

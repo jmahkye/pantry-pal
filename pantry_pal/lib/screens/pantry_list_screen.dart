@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 
 import '../models/pantry_item.dart';
 import '../services/notifications.dart';
-import '../services/product_image_cache.dart';
 import '../state/pantry_providers.dart';
 import 'item_edit_screen.dart';
 import 'recipes_screen.dart';
@@ -42,7 +41,6 @@ class PantryListScreen extends ConsumerWidget {
     if (item.id == null) return;
     await ref.read(pantryItemsProvider.notifier).delete(item.id!);
     await NotificationService.instance.cancelForItem(item.id!);
-    await ProductImageCache.instance.deleteAt(item.imageUrl);
   }
 
   @override
@@ -215,24 +213,18 @@ class _LeadingThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = item.imageUrl;
     if (url != null && url.isNotEmpty) {
-      final Widget image = ProductImageCache.isRemote(url)
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallback(context),
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return _fallback(context);
-              },
-            )
-          : Image.file(
-              File(url),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallback(context),
-            );
+      // Offline only: local file paths (e.g. a future OCR capture), never URLs.
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: SizedBox(width: 48, height: 48, child: image),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Image.file(
+            File(url),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _fallback(context),
+          ),
+        ),
       );
     }
     return _fallback(context);

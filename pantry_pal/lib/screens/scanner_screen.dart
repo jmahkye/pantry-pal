@@ -4,13 +4,18 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../data/database.dart';
 import '../models/pantry_item.dart';
 import '../services/gs1_parser.dart';
-import '../services/open_food_facts.dart';
-import '../services/product_image_cache.dart';
+import '../services/product_catalog.dart';
 
 class ScanResult {
+  /// Set when the scanned item is already in the pantry.
   final PantryItem? existing;
+
+  /// A draft to confirm/add. [productFound] is false when neither the user
+  /// table nor the bundled dump knew the GTIN — the caller runs OCR fallback.
   final PantryItem? draft;
-  const ScanResult({this.existing, this.draft});
+  final bool productFound;
+
+  const ScanResult({this.existing, this.draft, this.productFound = false});
 }
 
 class ScannerScreen extends StatefulWidget {
@@ -22,7 +27,7 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   final MobileScannerController _controller = MobileScannerController();
-  final OpenFoodFactsClient _api = OpenFoodFactsClient();
+  final ProductCatalog _catalog = ProductCatalog();
   bool _processing = false;
   bool _torchOn = false;
 
@@ -50,30 +55,18 @@ class _ScannerScreenState extends State<ScannerScreen> {
         return;
       }
 
-      final lookup = await _api.lookup(barcode);
-
-      String? imagePath = lookup?.imageUrl;
-      if (imagePath != null) {
-        final local = await ProductImageCache.instance
-            .download(barcode, imagePath);
-        if (local != null) imagePath = local;
-      }
-
-      final draft = PantryItem(
-        name: lookup?.name ?? 'Unknown product',
-        brand: lookup?.brand,
+      // Offline lookup: user table first, then the bundled products.db.
+      final info = await _catalog.lookup(barcode);
+      final draft = ProductCatalog.buildDraft(
         gtin: barcode,
-        category: lookup?.category ?? FoodCategory.other,
-        quantity: lookup?.quantity,
-        unit: lookup?.unit,
-        expiryDate: gs1.effectiveExpiry,
-        // GS1 AI 17 is authoritative; a heuristic date would be marked estimated.
-        expiryIsExact: gs1.effectiveExpiry != null,
-        addedDate: DateTime.now(),
-        imageUrl: imagePath,
+        info: info,
+        gs1: gs1,
+        scanDate: DateTime.now(),
       );
       if (!mounted) return;
-      Navigator.of(context).pop(ScanResult(draft: draft));
+      Navigator.of(context).pop(
+        ScanResult(draft: draft, productFound: info != null),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -18,7 +18,7 @@ class PantryDatabase {
     final path = p.join(dir, 'pantry.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE pantry_items (
@@ -40,6 +40,7 @@ class PantryDatabase {
         await db.execute(
             'CREATE INDEX idx_pantry_expiry ON pantry_items(expiry_date)');
         await db.execute('CREATE INDEX idx_pantry_gtin ON pantry_items(gtin)');
+        await _createUserProducts(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -61,7 +62,48 @@ class PantryDatabase {
           await db.execute(
               'CREATE INDEX IF NOT EXISTS idx_pantry_gtin ON pantry_items(gtin)');
         }
+        if (oldVersion < 4) {
+          await _createUserProducts(db);
+        }
       },
+    );
+  }
+
+  /// Products the user has confirmed via OCR. Kept separate from the bundled
+  /// products.db so app updates never wipe them, and checked first on lookup.
+  /// Mirrors the bundled `products` schema.
+  static Future<void> _createUserProducts(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS user_products (
+        gtin TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        brand TEXT,
+        quantity TEXT,
+        category TEXT,
+        shelf_life_days INTEGER
+      )
+    ''');
+  }
+
+  /// Looks up a confirmed user product by GTIN. Returns the raw row, or null.
+  Future<Map<String, Object?>?> findUserProduct(String gtin) async {
+    final db = await _database;
+    final rows = await db.query(
+      'user_products',
+      where: 'gtin = ?',
+      whereArgs: [gtin],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Saves (or overwrites) a confirmed user product so future scans recognise it.
+  Future<void> upsertUserProduct(Map<String, Object?> row) async {
+    final db = await _database;
+    await db.insert(
+      'user_products',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
