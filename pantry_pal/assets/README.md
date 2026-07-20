@@ -7,7 +7,7 @@ databases directory on first launch (see `lib/services/asset_db_installer.dart`)
 | File | Status | Produced by |
 |------|--------|-------------|
 | `products.db` | **placeholder** — 7 sample UK rows | Offline Python script dumping the Open Food Facts UK subset |
-| `recipes.db` | **placeholder** — schema only, no rows | Offline Python script that also writes the MiniLM embeddings |
+| `recipes.db` | **placeholder** — 6 sample recipes, no embeddings | Offline Python script that also writes the MiniLM embeddings |
 | `miniLmL6V2.onnx` | **missing** — drop the real model here | Export of `sentence-transformers/all-MiniLM-L6-v2` |
 
 ## Schemas the app expects
@@ -25,9 +25,22 @@ products(gtin TEXT PRIMARY KEY, name, brand, quantity, category,
 `recipes.db`:
 
 ```sql
-recipes(id, title, meal_type, diet_category, ingredients, steps,
+recipes(id, title, summary, meal_type, diet_category, ingredients, steps,
         time_minutes, calories, embedding BLOB)  -- 384 x float32, L2-normalised
 ```
+
+`ingredients` and `steps` are JSON arrays.
+
+## Enabling semantic recipe ranking
+
+`RecipeEngine` (`lib/services/recipe_engine.dart`) filters by meal_type +
+diet_category, then ranks. With `embedding` populated and a query embedder it
+uses dot-product (cosine) similarity; otherwise it falls back to
+ingredient-overlap against the pantry. To turn on semantic ranking:
+
+1. Drop the real `miniLmL6V2.onnx` here and fill `recipes.embedding`.
+2. Add the `fonnx` package and implement `RecipeQueryEmbedder` to embed the
+   pantry query with that model, then pass it to `RecipeEngine(embedder: ...)`.
 
 ## Regenerating the placeholders
 
