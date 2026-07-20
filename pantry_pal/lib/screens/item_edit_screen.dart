@@ -4,12 +4,22 @@ import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../models/pantry_item.dart';
 import '../services/notifications.dart';
+import '../services/product_catalog.dart';
 
 class ItemEditScreen extends StatefulWidget {
-  const ItemEditScreen({super.key, this.existing, this.draft});
+  const ItemEditScreen({
+    super.key,
+    this.existing,
+    this.draft,
+    this.registerAsUserProduct = false,
+  });
 
   final PantryItem? existing;
   final PantryItem? draft;
+
+  /// When true (OCR-confirmed products), also save the confirmed details to the
+  /// user_products table so the same barcode is recognised next time.
+  final bool registerAsUserProduct;
 
   @override
   State<ItemEditScreen> createState() => _ItemEditScreenState();
@@ -94,6 +104,20 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     }
     final saved = item.copyWith(id: id);
     await NotificationService.instance.scheduleForItem(saved);
+
+    // Remember OCR-confirmed products for future scans of the same barcode.
+    if (widget.registerAsUserProduct && saved.gtin != null) {
+      await ProductCatalog().saveConfirmed(
+        saved.gtin!,
+        ProductInfo(
+          name: saved.name,
+          brand: saved.brand,
+          category: saved.category,
+          quantity: saved.quantity,
+          unit: saved.unit,
+        ),
+      );
+    }
 
     if (!mounted) return;
     Navigator.of(context).pop(true);

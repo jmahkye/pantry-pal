@@ -8,6 +8,7 @@ import '../models/pantry_item.dart';
 import '../services/notifications.dart';
 import '../state/pantry_providers.dart';
 import 'item_edit_screen.dart';
+import 'ocr_capture_screen.dart';
 import 'recipes_screen.dart';
 import 'scanner_screen.dart';
 
@@ -19,10 +20,15 @@ class PantryListScreen extends ConsumerWidget {
     WidgetRef ref, {
     PantryItem? existing,
     PantryItem? draft,
+    bool registerAsUserProduct = false,
   }) async {
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ItemEditScreen(existing: existing, draft: draft),
+        builder: (_) => ItemEditScreen(
+          existing: existing,
+          draft: draft,
+          registerAsUserProduct: registerAsUserProduct,
+        ),
       ),
     );
     if (result == true) ref.read(pantryItemsProvider.notifier).refresh();
@@ -33,8 +39,23 @@ class PantryListScreen extends ConsumerWidget {
       MaterialPageRoute(builder: (_) => const ScannerScreen()),
     );
     if (scanned == null || !context.mounted) return;
+
+    // Already in the pantry, or a known product → straight to confirm/edit.
+    if (scanned.existing != null || scanned.productFound) {
+      await _openEditor(context, ref,
+          existing: scanned.existing, draft: scanned.draft);
+      return;
+    }
+
+    // Unknown barcode → OCR fallback, then confirm and remember the product.
+    final draft = scanned.draft;
+    if (draft == null) return;
+    final ocrDraft = await Navigator.of(context).push<PantryItem>(
+      MaterialPageRoute(builder: (_) => OcrCaptureScreen(seed: draft)),
+    );
+    if (ocrDraft == null || !context.mounted) return;
     await _openEditor(context, ref,
-        existing: scanned.existing, draft: scanned.draft);
+        draft: ocrDraft, registerAsUserProduct: true);
   }
 
   Future<void> _delete(WidgetRef ref, PantryItem item) async {
