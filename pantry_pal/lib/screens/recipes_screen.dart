@@ -2,19 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../data/database.dart';
 import '../models/recipe.dart';
-import '../services/ai_recipe_generator.dart';
-import '../services/llama_cpp_engine.dart';
 import '../services/recipe_generator.dart';
-import 'ai_settings_screen.dart';
 
+/// Suggests things to cook from what's in the pantry. Fully offline — the
+/// generator runs on-device with no network calls. Step 5 swaps the template
+/// generator for the fonnx/MiniLM retrieval engine.
 class RecipesScreen extends StatefulWidget {
-  RecipesScreen({super.key, RecipeGenerator? generator, LlamaCppEngine? engine})
-      : engine = engine ?? LlamaCppEngine(),
-        generator = generator ??
-            AiRecipeGenerator(engine: engine ?? LlamaCppEngine());
+  const RecipesScreen({super.key, this.generator = const StubRecipeGenerator()});
 
   final RecipeGenerator generator;
-  final LlamaCppEngine engine;
 
   @override
   State<RecipesScreen> createState() => _RecipesScreenState();
@@ -22,7 +18,6 @@ class RecipesScreen extends StatefulWidget {
 
 class _RecipesScreenState extends State<RecipesScreen> {
   late Future<List<Recipe>> _recipesFuture;
-  bool _usingOnDeviceAi = false;
 
   @override
   void initState() {
@@ -31,17 +26,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Future<List<Recipe>> _load() async {
-    _usingOnDeviceAi = await widget.engine.isAvailable();
     final items = await PantryDatabase.instance.all();
-    final result = await widget.generator.suggest(available: items);
-    if (mounted) setState(() {});
-    return result;
+    return widget.generator.suggest(available: items);
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _recipesFuture = _load();
-    });
+    setState(() => _recipesFuture = _load());
     await _recipesFuture;
   }
 
@@ -51,20 +41,6 @@ class _RecipesScreenState extends State<RecipesScreen> {
       appBar: AppBar(
         title: const Text('Recipes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            tooltip: 'AI settings',
-            icon: const Icon(Icons.auto_awesome),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
-              );
-              if (mounted) {
-                setState(() => _recipesFuture = _load());
-              }
-            },
-          ),
-        ],
       ),
       body: FutureBuilder<List<Recipe>>(
         future: _recipesFuture,
@@ -82,9 +58,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
               padding: const EdgeInsets.all(12),
               itemCount: recipes.length + 1,
               itemBuilder: (context, i) {
-                if (i == recipes.length) {
-                  return _SourceFooter(usingAi: _usingOnDeviceAi);
-                }
+                if (i == recipes.length) return const _SourceFooter();
                 return _RecipeCard(recipe: recipes[i]);
               },
             ),
@@ -144,26 +118,20 @@ class _EmptyRecipes extends StatelessWidget {
 }
 
 class _SourceFooter extends StatelessWidget {
-  const _SourceFooter({required this.usingAi});
-
-  final bool usingAi;
+  const _SourceFooter();
 
   @override
   Widget build(BuildContext context) {
-    final text = usingAi
-        ? 'Generated on-device by a local model. No network calls.'
-        : 'Template-based suggestions. Download the AI model from settings to enable local generation.';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(usingAi ? Icons.auto_awesome : Icons.info_outline,
-              size: 14, color: Colors.grey.shade600),
+          Icon(Icons.lock_outline, size: 14, color: Colors.grey.shade600),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              text,
+              'Suggested on-device. No network calls.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             ),
